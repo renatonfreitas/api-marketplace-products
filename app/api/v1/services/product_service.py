@@ -1,0 +1,113 @@
+from decimal import Decimal
+import logging
+from uuid import UUID
+from fastapi import status, HTTPException
+from app.api.v1.repositories.product_repository import ProductRepository
+from app.core.exceptions import EmptyListResponse, ProductNotFoundError
+from app.schemas.v1.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductResponse
+
+logger = logging.getLogger(__name__)
+
+class ProductService:
+
+    @staticmethod
+    async def list_products(params: ProductFilterParams) -> PaginatedProductResponse:
+        """Lista produtos com filtros e paginação"""
+        try:
+            products, total = await ProductRepository.get_all_products(
+                page=params.page,
+                limit=params.limit,
+                sort=params.sort,
+                order=params.order,
+                category=params.category,
+                min_price=params.min_price,
+                max_price=params.max_price,
+                search=params.search
+            )
+
+            if not products:
+                raise EmptyListResponse()
+                # return PaginatedProductResponse(data=[], total=0)
+            
+            # Converter para response
+            product_list = []
+            for p in products:
+                category_count = len(p.get("categories", [])) if p.get("categories") else 0
+                product_list.append(ProductListResponse(
+                    product_id=UUID(p["product_id"]),
+                    name=p["name"],
+                    sku=p["sku"],
+                    description=p["description"],
+                    quantity_per_unit=p["quantity_per_unit"],
+                    unit_price=Decimal(str(p["unit_price"])),
+                    discount=Decimal(str(p["discount"])),
+                    category_count=category_count,
+                    created_at=p["created_at"]
+                ))
+
+            pages = (total + params.limit - 1) // params.limit
+
+            return PaginatedProductResponse(
+                data=product_list,
+                total=total,
+                page=params.page,
+                limit=params.limit,
+                pages=pages
+            )
+        
+        except EmptyListResponse:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao listar produtos: {str(e)}")
+            raise Exception(f"Erro ao listar produtos: {str(e)}")
+
+    @staticmethod
+    async def get_product_by_sku(sku: str) -> ProductResponse:
+        """Busca produto por SKU"""
+        try:
+            product = await ProductRepository.get_by_sku(sku)
+            if not product:
+                raise ProductNotFoundError(sku)
+
+            # Processar categorias
+            categories = []
+            if product.get("categories"):
+                for cat_data in product["categories"]:
+                    if isinstance(cat_data, dict) and "categories" in cat_data:
+                        categories.append(cat_data["categories"])
+
+            product_response = ProductResponse(
+                product_id=UUID(product["product_id"]),
+                name=product["name"],
+                sku=product["sku"],
+                description=product["description"],
+                quantity_per_unit=product["quantity_per_unit"],
+                unit_price=Decimal(str(product["unit_price"])),
+                discount=Decimal(str(product["discount"])),
+                categories=categories,
+                created_at=product["created_at"],
+                updated_at=product["updated_at"]
+            )
+
+            return product_response
+        
+        except ProductNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao buscar produto: {str(e)}")
+            raise Exception(f"Erro ao buscar produto: {str(e)}")
+
+    # TODO
+    # @staticmethod
+    # async def create_product(request: ProductRequest) -> ProductResponse:
+    #     """Cria novo produto"""
+
+    # TODO
+    # @staticmethod
+    # async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
+    #     """Atualiza produto"""
+
+    # TODO
+    # @staticmethod
+    # async def delete_product(sku: str) -> dict:
+    #     """Deleta produto"""
