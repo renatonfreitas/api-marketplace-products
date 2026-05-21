@@ -1,5 +1,5 @@
 # 🛒 API Marketplace de Produtos
- 
+
 Uma API FastAPI moderna e robusta para gerenciamento de **produtos, categorias, fornecedores e endereços** em um marketplace. Construída com **Supabase (PostgreSQL)** como banco de dados e **SQLModel** para validação de dados.
  
 ---
@@ -214,6 +214,8 @@ api-marketplace-products/
 ├── .env.example
 ├── pyproject.toml
 ├── README.md
+├── DEPLOYMENT.md
+├── LICENSE.md
 └── uv.lock
 ```
  
@@ -414,6 +416,12 @@ Acesse a documentação interativa da API:
 
 ---
  
+## 🚢 Deploy
+
+> 🔗 Para um guia detalhado de deploy no AWS EC2, consulte [DEPLOYMENT.md](DEPLOYMENT.md)
+
+---
+
 ## 📄 Licença
  
 Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para detalhes.
