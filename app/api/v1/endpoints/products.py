@@ -1,10 +1,9 @@
+
 from decimal import Decimal
 from fastapi import APIRouter, HTTPException, Query, status
 from app.api.v1.services.product_service import ProductService
 from app.core.exceptions import EmptyListResponse
-from app.schemas.v1.product import PaginatedProductResponse, ProductFilterParams, ProductResponse
-import logging
-
+from app.schemas.v1.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductResponse, ProductRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter( # Controller
@@ -98,12 +97,33 @@ async def get_product(sku: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao buscar produto"
         )
+@staticmethod
+async def create_product(request: ProductRequest) -> ProductResponse:
+    """Cria novo produto"""
 
-# TODO
-# @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-# async def create_product(product: ProductRequest):
-#     """
-#     Cria um novo produto
+    try:
+        product = await ProductRepository.create_product(request)
+
+        return ProductResponse(
+            product_id=UUID(product["product_id"]),
+            name=product["name"],
+            sku=product["sku"],
+            description=product["description"],
+            quantity_per_unit=product["quantity_per_unit"],
+            unit_price=Decimal(str(product["unit_price"])),
+            discount=Decimal(str(product["discount"])),
+            categories=[],
+            created_at=product["created_at"],
+            updated_at=product["updated_at"]
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao criar produto: {str(e)}")
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao criar produto: {str(e)}"
+        )
 
 #     **Body:**
 #     - name: Nome do produto (obrigatório)

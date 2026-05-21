@@ -111,10 +111,40 @@ class ProductRepository:
             raise
 
 
-    # TODO
-    # @staticmethod
-    # async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
-    #     """Cria novo produto com categorias"""
+    @staticmethod
+async def create_product(request) -> dict:
+    """Cria novo produto"""
+
+    try:
+        # Verifica se SKU já existe
+        existing = supabase.table("products").select("product_id").eq(
+            "sku",
+            request.sku
+        ).execute()
+
+        if existing.data:
+            raise Exception("SKU já cadastrado")
+
+        # Dados do produto
+        product_data = {
+            "name": request.name,
+            "sku": request.sku,
+            "description": request.description,
+            "quantity_per_unit": request.quantity_per_unit,
+            "unit_price": float(request.unit_price),
+            "discount": float(request.discount)
+        }
+
+        # Inserir produto
+        response = supabase.table("products").insert(
+            product_data
+        ).execute()
+
+        return response.data[0]
+
+    except Exception as e:
+        logger.error(f"Erro ao criar produto: {str(e)}")
+        raise
 
     # TODO
     # @staticmethod
