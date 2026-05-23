@@ -164,7 +164,7 @@ async def create_product(request: ProductRequest) -> ProductResponse:
 #     - 409: SKU já existe
 #     - 500: Erro no servidor
 #     """
-    
+    ssss
 
 
 # TODO
