@@ -102,27 +102,62 @@ async def create_product(request: ProductRequest) -> ProductResponse:
     """Cria novo produto"""
 
     try:
-        product = await ProductRepository.create_product(request)
+        # Verifica SKU duplicado
+        sku_exists = await ProductRepository.check_sku_exists(request.sku)
+
+        if sku_exists:
+            raise DuplicateSkuError(request.sku)
+
+        # Validar categorias
+        if request.category_ids:
+            categories_valid = await ProductRepository.validate_categories_exist(
+                request.category_ids
+            )
+
+            if not categories_valid:
+                raise CategoryNotFoundError(request.category_ids[0])
+
+        # Dados do produto
+        product_data = {
+            "name": request.name,
+            "sku": request.sku,
+            "description": request.description,
+            "quantity_per_unit": request.quantity_per_unit,
+            "unit_price": float(request.unit_price),
+            "discount": float(request.discount)
+        }
+
+        # Repository salva no banco
+        created_product = await ProductRepository.create(
+            product_data=product_data,
+            category_ids=request.category_ids
+        )
 
         return ProductResponse(
-            product_id=UUID(product["product_id"]),
-            name=product["name"],
-            sku=product["sku"],
-            description=product["description"],
-            quantity_per_unit=product["quantity_per_unit"],
-            unit_price=Decimal(str(product["unit_price"])),
-            discount=Decimal(str(product["discount"])),
+            product_id=UUID(created_product["product_id"]),
+            name=created_product["name"],
+            sku=created_product["sku"],
+            description=created_product["description"],
+            quantity_per_unit=created_product["quantity_per_unit"],
+            unit_price=Decimal(str(created_product["unit_price"])),
+            discount=Decimal(str(created_product["discount"])),
             categories=[],
-            created_at=product["created_at"],
-            updated_at=product["updated_at"]
+            created_at=created_product["created_at"],
+            updated_at=created_product["updated_at"]
         )
+
+    except (
+        DuplicateSkuError,
+        CategoryNotFoundError
+    ):
+        raise
 
     except Exception as e:
         logger.error(f"Erro ao criar produto: {str(e)}")
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao criar produto: {str(e)}"
+            detail="Erro ao criar produto"
         )
 
 #     **Body:**
