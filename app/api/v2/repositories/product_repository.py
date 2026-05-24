@@ -2,6 +2,7 @@ from decimal import Decimal
 import logging
 from uuid import UUID
 from app.core.database import supabase
+from app.core.exceptions import ProductNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -147,136 +148,87 @@ class ProductRepository:
     #     """Cria novo produto com categorias"""
 
     @staticmethod
-    async def get_by_id(product_id: UUID) -> dict | None:
-        """Busca produto pelo ID (UUID) - usado internamente"""
-        try:
-            response = supabase.table("products").select(
-                "*, "
-                "categories: products_categories(category_id, categories(*)), "
-                "suppliers: products_suppliers(supplier_id, suppliers(*, addresses(*)))"
-            ).eq("product_id", str(product_id)).execute()
-            
-            return response.data[0] if response.data else None
-        except Exception as e:
-            logger.error(f"Erro ao buscar produto por ID: {str(e)}")
-            raise
-
-    @staticmethod
-    async def update(
-        sku: str,
-        product_data: dict,
-        category_ids: list[UUID] | None = None,
-        supplier_ids: list[UUID] | None = None
-    ) -> dict:
+    async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
         """
-        Atualiza produto e suas relações de forma atômica
+        Atualiza um produto existente com validações de negócio
         
         Args:
-            sku: SKU do produto
-            product_data: Campos a atualizar na tabela products
-            category_ids: Lista de UUIDs de categorias (None = não altera)
-            supplier_ids: Lista de UUIDs de suppliers (None = não altera)
+            sku: SKU do produto a atualizar
+            request: Dados parciais para atualização
         
         Returns:
-            Produto atualizado com relações carregadas
+            ProductResponse com o produto atualizado
+        
+        Raises:
+            ProductNotFoundError: Produto não existe
+            HTTPException 409: SKU em conflito
+            HTTPException 400: Categorias/suppliers inválidos
         """
         try:
-            # Busca o produto atual para obter o ID
+            # 1. Verifica se o produto existe
             existing = await ProductRepository.get_by_sku(sku)
             if not existing:
                 raise ProductNotFoundError(sku)
             
-            product_id = existing["product_id"]
+            product_id = UUID(existing["product_id"])
             
-            # Atualiza campos do produto (se houver dados)
-            if product_data:
-                update_response = (
-                    supabase.table("products")
-                    .update(product_data)
-                    .eq("sku", sku)
-                    .execute()
-                )
-                
-                if not update_response.data:
-                    raise Exception(f"Falha ao atualizar produto SKU: {sku}")
+            # 2. Se o request tem um novo SKU, valida unicidade
+            if request.sku and request.sku != sku:
+                if await ProductRepository.check_sku_exists(request.sku):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"SKU '{request.sku}' já está em uso"
+                    )
             
-            # Atualiza relações de categorias (se fornecidas)
+            # 3. Valida categorias e suppliers (se fornecidos)
+            if request.category_ids is not None:
+                if not await ProductRepository.validate_categories_exist(request.category_ids):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Uma ou mais categorias não existem ou estão inativas"
+                    )
+            
+            if request.supplier_ids is not None:
+                if not await ProductRepository.validate_suppliers_exist(request.supplier_ids):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Um ou mais suppliers não existem ou estão inativos"
+                    )
+            
+            # 4. Prepara dados para atualização
+            update_fields = request.model_dump(exclude_unset=True)
+            category_ids = update_fields.pop("category_ids", None)
+            supplier_ids = update_fields.pop("supplier_ids", None)
+            
+            # 5. Atualiza tabela products (se houver campos)
+            if update_fields:
+                await ProductRepository.update_product_data(product_id, update_fields)
+            
+            # 6. Atualiza relações (apenas se listas foram enviadas)
             if category_ids is not None:
-                await ProductRepository._update_product_categories(
-                    product_id, category_ids
-                )
+                await ProductRepository.replace_product_categories(product_id, category_ids)
             
-            # Atualiza relações de suppliers (se fornecidas)
             if supplier_ids is not None:
-                await ProductRepository._update_product_suppliers(
-                    product_id, supplier_ids
-                )
+                await ProductRepository.replace_product_suppliers(product_id, supplier_ids)
             
-            # Retorna o produto completo atualizado
+            # 7. Busca o produto atualizado para retornar
             updated_product = await ProductRepository.get_by_sku(
-                product_data.get("sku", sku)  # usa novo SKU se foi alterado
+                request.sku if request.sku else sku
             )
-            return updated_product
             
+            # 8. Formata resposta
+            return await ProductService._format_product_response(updated_product)
+        
         except ProductNotFoundError:
             raise
-        except Exception as e:
-            logger.error(f"Erro ao atualizar produto {sku}: {str(e)}")
+        except HTTPException:
             raise
-
-    @staticmethod
-    async def _update_product_categories(product_id: UUID, category_ids: list[UUID]) -> None:
-        """Atualiza relações produto-categoria de forma segura"""
-        try:
-            # Remove relações existentes
-            supabase.table("products_categories") \
-                .delete() \
-                .eq("product_id", str(product_id)) \
-                .execute()
-            
-            # Insere novas relações (se houver categorias)
-            if category_ids:
-                relations = [
-                    {
-                        "product_id": str(product_id),
-                        "category_id": str(category_id)
-                    }
-                    for category_id in category_ids
-                ]
-                supabase.table("products_categories") \
-                    .insert(relations) \
-                    .execute()
-                    
         except Exception as e:
-            logger.error(f"Erro ao atualizar categorias do produto {product_id}: {str(e)}")
-            raise
-
-    @staticmethod
-    async def _update_product_suppliers(product_id: UUID, supplier_ids: list[UUID]) -> None:
-        """Atualiza relações produto-supplier de forma segura"""
-        try:
-            # Remove relações existentes
-            supabase.table("products_suppliers") \
-                .delete() \
-                .eq("product_id", str(product_id)) \
-                .execute()
-            
-            # Insere novas relações (se houver suppliers)
-            if supplier_ids:
-                relations = [
-                    {
-                        "product_id": str(product_id),
-                        "supplier_id": str(supplier_id)
-                    }
-                    for supplier_id in supplier_ids
-                ]
-                supabase.table("products_suppliers") \
-                    .insert(relations) \
-                    .execute()
-                    
-        except Exception as e:
-            logger.error(f"Erro ao atualizar suppliers do produto {product_id}: {str(e)}")
-            raise
+            logger.error(f"Erro ao atualizar produto: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao atualizar produto"
+            )
 
     # TODO
     # @staticmethod
