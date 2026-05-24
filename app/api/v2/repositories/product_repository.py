@@ -136,7 +136,7 @@ class ProductRepository:
             query = supabase.table("products").select("product_id").eq("sku", sku)
 
             response = query.execute()
-            return len(response.data > 0)
+            return len(response.data) > 0
         except Exception as e:
             logger.error(f"Erro ao verificar SKU: {str(e)}")
             raise
@@ -145,12 +145,53 @@ class ProductRepository:
     # TODO
     # @staticmethod
     # async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
-    #     """Cria novo produto com categorias"""
+    #              """Cria novo produto com categorias"""
+    
 
-    # TODO
-    # @staticmethod
-    # async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
-    #     """Atualiza produto"""
+    @staticmethod
+    async def update(
+        sku: str,
+        product_data: dict,
+        category_ids: list[UUID] | None = None,
+        supplier_ids: list[UUID] | None = None
+    ) -> dict:
+        """Atualiza produto e suas relações de forma atômica"""
+        try:
+            existing = await ProductRepository.get_by_sku(sku)
+            if not existing:
+                raise ProductNotFoundError(sku)
+
+            product_id = existing["product_id"]
+
+            if product_data:
+                update_response = supabase.table("products") \
+                    .update(product_data) \
+                    .eq("sku", sku) \
+                    .execute()
+
+                if not update_response.data:
+                    raise Exception(f"Falha ao atualizar produto SKU: {sku}")
+
+            if category_ids is not None:
+                await ProductRepository._update_product_categories(
+                    product_id, category_ids
+                )
+
+            if supplier_ids is not None:
+                await ProductRepository._update_product_suppliers(
+                    product_id, supplier_ids
+                )
+
+            updated_product = await ProductRepository.get_by_sku(
+                product_data.get("sku", sku)
+            )
+            return updated_product
+
+        except ProductNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao atualizar produto {sku}: {str(e)}")
+            raise
     # TODO
     # @staticmethod
     # async def delete(sku: str) -> bool:
