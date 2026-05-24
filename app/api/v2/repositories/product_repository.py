@@ -147,89 +147,10 @@ class ProductRepository:
     # async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
     #     """Cria novo produto com categorias"""
 
-    @staticmethod
-    async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
-        """
-        Atualiza um produto existente com validações de negócio
-        
-        Args:
-            sku: SKU do produto a atualizar
-            request: Dados parciais para atualização
-        
-        Returns:
-            ProductResponse com o produto atualizado
-        
-        Raises:
-            ProductNotFoundError: Produto não existe
-            HTTPException 409: SKU em conflito
-            HTTPException 400: Categorias/suppliers inválidos
-        """
-        try:
-            # 1. Verifica se o produto existe
-            existing = await ProductRepository.get_by_sku(sku)
-            if not existing:
-                raise ProductNotFoundError(sku)
-            
-            product_id = UUID(existing["product_id"])
-            
-            # 2. Se o request tem um novo SKU, valida unicidade
-            if request.sku and request.sku != sku:
-                if await ProductRepository.check_sku_exists(request.sku):
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"SKU '{request.sku}' já está em uso"
-                    )
-            
-            # 3. Valida categorias e suppliers (se fornecidos)
-            if request.category_ids is not None:
-                if not await ProductRepository.validate_categories_exist(request.category_ids):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Uma ou mais categorias não existem ou estão inativas"
-                    )
-            
-            if request.supplier_ids is not None:
-                if not await ProductRepository.validate_suppliers_exist(request.supplier_ids):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Um ou mais suppliers não existem ou estão inativos"
-                    )
-            
-            # 4. Prepara dados para atualização
-            update_fields = request.model_dump(exclude_unset=True)
-            category_ids = update_fields.pop("category_ids", None)
-            supplier_ids = update_fields.pop("supplier_ids", None)
-            
-            # 5. Atualiza tabela products (se houver campos)
-            if update_fields:
-                await ProductRepository.update_product_data(product_id, update_fields)
-            
-            # 6. Atualiza relações (apenas se listas foram enviadas)
-            if category_ids is not None:
-                await ProductRepository.replace_product_categories(product_id, category_ids)
-            
-            if supplier_ids is not None:
-                await ProductRepository.replace_product_suppliers(product_id, supplier_ids)
-            
-            # 7. Busca o produto atualizado para retornar
-            updated_product = await ProductRepository.get_by_sku(
-                request.sku if request.sku else sku
-            )
-            
-            # 8. Formata resposta
-            return await ProductService._format_product_response(updated_product)
-        
-        except ProductNotFoundError:
-            raise
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Erro ao atualizar produto: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao atualizar produto"
-            )
-
+    # TODO
+    # @staticmethod
+    # async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
+    #     """Atualiza produto"""
     # TODO
     # @staticmethod
     # async def delete(sku: str) -> bool:
