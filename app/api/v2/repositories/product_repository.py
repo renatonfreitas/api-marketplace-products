@@ -146,10 +146,137 @@ class ProductRepository:
     # async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
     #     """Cria novo produto com categorias"""
 
-    # TODO
-    # @staticmethod
-    # async def update(sku: str, product_data: dict, category_ids: list[UUID] | None = None) -> dict:
-    #     """Atualiza produto e categorias"""
+    @staticmethod
+    async def get_by_id(product_id: UUID) -> dict | None:
+        """Busca produto pelo ID (UUID) - usado internamente"""
+        try:
+            response = supabase.table("products").select(
+                "*, "
+                "categories: products_categories(category_id, categories(*)), "
+                "suppliers: products_suppliers(supplier_id, suppliers(*, addresses(*)))"
+            ).eq("product_id", str(product_id)).execute()
+            
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Erro ao buscar produto por ID: {str(e)}")
+            raise
+
+    @staticmethod
+    async def update(
+        sku: str,
+        product_data: dict,
+        category_ids: list[UUID] | None = None,
+        supplier_ids: list[UUID] | None = None
+    ) -> dict:
+        """
+        Atualiza produto e suas relações de forma atômica
+        
+        Args:
+            sku: SKU do produto
+            product_data: Campos a atualizar na tabela products
+            category_ids: Lista de UUIDs de categorias (None = não altera)
+            supplier_ids: Lista de UUIDs de suppliers (None = não altera)
+        
+        Returns:
+            Produto atualizado com relações carregadas
+        """
+        try:
+            # Busca o produto atual para obter o ID
+            existing = await ProductRepository.get_by_sku(sku)
+            if not existing:
+                raise ProductNotFoundError(sku)
+            
+            product_id = existing["product_id"]
+            
+            # Atualiza campos do produto (se houver dados)
+            if product_data:
+                update_response = (
+                    supabase.table("products")
+                    .update(product_data)
+                    .eq("sku", sku)
+                    .execute()
+                )
+                
+                if not update_response.data:
+                    raise Exception(f"Falha ao atualizar produto SKU: {sku}")
+            
+            # Atualiza relações de categorias (se fornecidas)
+            if category_ids is not None:
+                await ProductRepository._update_product_categories(
+                    product_id, category_ids
+                )
+            
+            # Atualiza relações de suppliers (se fornecidas)
+            if supplier_ids is not None:
+                await ProductRepository._update_product_suppliers(
+                    product_id, supplier_ids
+                )
+            
+            # Retorna o produto completo atualizado
+            updated_product = await ProductRepository.get_by_sku(
+                product_data.get("sku", sku)  # usa novo SKU se foi alterado
+            )
+            return updated_product
+            
+        except ProductNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao atualizar produto {sku}: {str(e)}")
+            raise
+
+    @staticmethod
+    async def _update_product_categories(product_id: UUID, category_ids: list[UUID]) -> None:
+        """Atualiza relações produto-categoria de forma segura"""
+        try:
+            # Remove relações existentes
+            supabase.table("products_categories") \
+                .delete() \
+                .eq("product_id", str(product_id)) \
+                .execute()
+            
+            # Insere novas relações (se houver categorias)
+            if category_ids:
+                relations = [
+                    {
+                        "product_id": str(product_id),
+                        "category_id": str(category_id)
+                    }
+                    for category_id in category_ids
+                ]
+                supabase.table("products_categories") \
+                    .insert(relations) \
+                    .execute()
+                    
+        except Exception as e:
+            logger.error(f"Erro ao atualizar categorias do produto {product_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    async def _update_product_suppliers(product_id: UUID, supplier_ids: list[UUID]) -> None:
+        """Atualiza relações produto-supplier de forma segura"""
+        try:
+            # Remove relações existentes
+            supabase.table("products_suppliers") \
+                .delete() \
+                .eq("product_id", str(product_id)) \
+                .execute()
+            
+            # Insere novas relações (se houver suppliers)
+            if supplier_ids:
+                relations = [
+                    {
+                        "product_id": str(product_id),
+                        "supplier_id": str(supplier_id)
+                    }
+                    for supplier_id in supplier_ids
+                ]
+                supabase.table("products_suppliers") \
+                    .insert(relations) \
+                    .execute()
+                    
+        except Exception as e:
+            logger.error(f"Erro ao atualizar suppliers do produto {product_id}: {str(e)}")
+            raise
 
     # TODO
     # @staticmethod
