@@ -1,10 +1,10 @@
 from decimal import Decimal
 import logging
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Body, HTTPException, Path, Query, status
 from sqlmodel import default
 from app.api.v2.services.product_service import ProductService
 from app.core.exceptions import EmptyListResponse
-from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductResponse
+from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductResponse, ProductUpdate
 
 logger = logging.getLogger(__name__)
 
