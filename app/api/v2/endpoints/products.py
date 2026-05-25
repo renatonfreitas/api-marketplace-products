@@ -120,7 +120,7 @@ async def get_product(sku: str):
 #     - 500: Erro no servidor
 #     """
 
-@router.put(
+router.put(
     "/{sku}",
     response_model=ProductResponse,
     status_code=status.HTTP_200_OK,
@@ -129,7 +129,7 @@ async def get_product(sku: str):
 )
 async def update_product(
     sku: str = Path(..., description="SKU do produto a atualizar"),
-    product: ProductRequest = Body(..., description="Campos a atualizar (todos opcionais)")
+    product: ProductUpdate = Body(..., description="Campos a atualizar (todos opcionais)")
 ):
     """
     Atualiza um produto e suas relações (categorias e fornecedores).
