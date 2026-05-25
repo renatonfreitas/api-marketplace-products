@@ -1,5 +1,6 @@
 from app.api.v2.repositories.product_repository import ProductRepository
 from app.api.v2.repositories.supplier_repository import SupplierRepository
+from app.core.exceptions import ProductNotFoundError
 from app.core.exceptions import EmptyListResponse, ProductNotFoundError
 from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductRequest, ProductResponse
 from decimal import Decimal
@@ -118,53 +119,44 @@ class ProductService:
     # async def create_product(request: ProductRequest) -> ProductResponse:
     #     """Cria novo produto"""
 
-@staticmethod
-    async def get_product(sku: str) -> ProductResponse:
-        try:
-            product = await ProductRepository.get_by_sku(sku)
-            if not product:
-                raise ProductNotFoundError(sku)
-            return await ProductService._format_product_response(product)
-        except ProductNotFoundError:
-            raise
-        except Exception as e:
-            logger.error(f"Erro ao buscar produto: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao buscar produto"
-            )
-
     @staticmethod
-    async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
+    async def update_product(sku: str, request: ProductUpdate) -> ProductResponse:
+        """Atualiza um produto existente (parcial)"""
         try:
-            # Verifica se produto existe
+            # 1. Valida existência (lógica de negócio)
             existing = await ProductRepository.get_by_sku(sku)
             if not existing:
                 raise ProductNotFoundError(sku)
 
-            # Valida novo SKU, se alterado
+            product_id = UUID(existing["product_id"])
+
+            # 2. Valida novo SKU (se alterado)
             if request.sku and request.sku != sku:
                 if await ProductRepository.check_sku_exists(request.sku):
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
-                        detail=f"SKU '{request.sku}' já está em uso"
+                        detail=f"SKU '{request.sku}' já está em uso",
                     )
 
-            # Valida categorias e suppliers, se fornecidos
+            # 3. Valida categorias e suppliers (se fornecidos)
             if request.category_ids is not None:
-                if not await ProductRepository.validate_categories_exist(request.category_ids):
+                if not await ProductRepository.validate_categories_exist(
+                    request.category_ids
+                ):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Uma ou mais categorias não existem"
+                        detail="Uma ou mais categorias não existem",
                     )
             if request.supplier_ids is not None:
-                if not await ProductRepository.validate_suppliers_exist(request.supplier_ids):
+                if not await ProductRepository.validate_suppliers_exist(
+                    request.supplier_ids
+                ):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Um ou mais suppliers não existem"
+                        detail="Um ou mais suppliers não existem",
                     )
 
-            # Prepara dados (apenas campos enviados)
+            # 4. Prepara dados (apenas campos enviados)
             update_data = request.model_dump(exclude_unset=True)
             category_ids = update_data.pop("category_ids", None)
             supplier_ids = update_data.pop("supplier_ids", None)
@@ -172,22 +164,24 @@ class ProductService:
             if not update_data and category_ids is None and supplier_ids is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Nenhum campo para atualizar"
+                    detail="Nenhum campo para atualizar",
                 )
 
+            # 5. Chama o repository (passando product_id)
             updated_product = await ProductRepository.update(
-                sku=sku,
+                product_id=product_id,
                 product_data=update_data,
                 category_ids=category_ids,
-                supplier_ids=supplier_ids
+                supplier_ids=supplier_ids,
             )
 
+            # 6. Formata resposta
             return await ProductService._format_product_response(updated_product)
 
         except ProductNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Produto com SKU '{sku}' não encontrado"
+                detail=f"Produto com SKU '{sku}' não encontrado",
             )
         except HTTPException:
             raise
@@ -195,57 +189,8 @@ class ProductService:
             logger.error(f"Erro ao atualizar produto: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao atualizar produto"
+                detail="Erro ao atualizar produto",
             )
-
-    @staticmethod
-    async def _format_product_response(product: dict) -> ProductResponse:
-        """Formata o dicionário do banco para ProductResponse"""
-        categories = []
-        if product.get("categories"):
-            for cat_rel in product["categories"]:
-                if cat_rel.get("categories"):
-                    cat = cat_rel["categories"]
-                    categories.append({
-                        "category_id": UUID(cat["category_id"]),
-                        "name": cat["name"],
-                        "is_active": cat.get("is_active", True),
-                        "created_at": cat["created_at"],
-                        "updated_at": cat.get("updated_at")
-                    })
-
-        suppliers = []
-        if product.get("suppliers"):
-            for sup_rel in product["suppliers"]:
-                if sup_rel.get("suppliers"):
-                    sup = sup_rel["suppliers"]
-                    supplier_data = {
-                        "supplier_id": UUID(sup["supplier_id"]),
-                        "name": sup["name"],
-                        "email": sup.get("email"),
-                        "phone": sup.get("phone"),
-                        "is_active": sup.get("is_active", True),
-                        "created_at": sup["created_at"],
-                        "updated_at": sup.get("updated_at")
-                    }
-                    if sup.get("addresses"):
-                        supplier_data["address"] = sup["addresses"]
-                    suppliers.append(supplier_data)
-
-        return ProductResponse(
-            product_id=UUID(product["product_id"]),
-            sku=product["sku"],
-            name=product["name"],
-            unit_price=Decimal(str(product["unit_price"])),
-            discount=Decimal(str(product.get("discount", 0))),
-            description=product.get("description"),
-            unit_quantity=product.get("unit_quantity"),
-            categories=categories,
-            suppliers=suppliers,
-            is_active=product.get("is_active", True),
-            created_at=product["created_at"],
-            updated_at=product.get("updated_at")
-        )
 
     # TODO
     # @staticmethod
