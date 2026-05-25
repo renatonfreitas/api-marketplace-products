@@ -207,6 +207,7 @@ async def update(
     except Exception as e:
         logger.error(f"Erro ao atualizar produto ID {product_id}: {str(e)}")
         raise
+    
     # TODO
     # @staticmethod
     # async def delete(sku: str) -> bool:

@@ -1,8 +1,9 @@
+from fastapi import HTTPException, status
 from app.api.v2.repositories.product_repository import ProductRepository
 from app.api.v2.repositories.supplier_repository import SupplierRepository
 from app.core.exceptions import ProductNotFoundError
 from app.core.exceptions import EmptyListResponse, ProductNotFoundError
-from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductRequest, ProductResponse
+from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductRequest, ProductResponse, ProductUpdate
 from decimal import Decimal
 from uuid import UUID
 import logging

@@ -1,10 +1,11 @@
 from decimal import Decimal
 import logging
-logger = logging.getLogger(_name_)
 from fastapi import APIRouter, HTTPException, Query, status
 from app.api.v1.services.product_service import ProductService
 from app.core.exceptions import EmptyListResponse
 from app.schemas.v1.product import (PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductResponse, ProductRequest)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter( # Controller
     prefix="/products",
@@ -97,47 +98,43 @@ async def get_product(sku: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao buscar produto"
         )
-@router.post(
-    "",
-    response_model=ProductResponse,
-    status_code=status.HTTP_201_CREATED
-)
+
+@router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(product: ProductRequest):
+        """
+        **Body:**
+        - name: Nome do produto (obrigatório)
+        - sku: Identificador único (obrigatório)
+        - unit_price: Preço unitário em decimal (obrigatório)
+        - description: Descrição (opcional)
+        - quantity_per_unit: Quantidade por unidade (opcional)
+        - discount: Desconto em % (0-100, padrão: 0)
+        - category_ids: Lista de UUIDs de categorias (opcional)
+        
+        **Responses:**
+        - 201: Produto criado com sucesso
+        - 400: Dados inválidos
+        - 409: SKU já existe
+        - 500: Erro no servidor
+        """
+        try:
+            return await ProductService.create_product(product)
 
-    try:
-        return await ProductService.create_product(product)
+        except HTTPException as e:
+            raise e
 
-    except HTTPException as e:
-        raise e
+        except Exception as e:
+            logger.error(f"Erro ao criar produto: {str(e)}")
 
-    except Exception as e:
-        logger.error(f"Erro ao criar produto: {str(e)}")
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao criar produto"
-        )
-
-#     **Body:**
-#     - name: Nome do produto (obrigatório)
-#     - sku: Identificador único (obrigatório)
-#     - unit_price: Preço unitário em decimal (obrigatório)
-#     - description: Descrição (opcional)
-#     - quantity_per_unit: Quantidade por unidade (opcional)
-#     - discount: Desconto em % (0-100, padrão: 0)
-#     - category_ids: Lista de UUIDs de categorias (opcional)
-    
-#     **Responses:**
-#     - 201: Produto criado com sucesso
-#     - 400: Dados inválidos
-#     - 409: SKU já existe
-#     - 500: Erro no servidor
-#     """
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar produto"
+            )
 
 # TODO
 # @router.put("/{sku}", response_model=ProductResponse)
 # async def update_product(sku: str, product: ProductRequest):
-#     """
+#     
 #     Atualiza um produto
 
 #     **Path:**
@@ -157,7 +154,6 @@ async def create_product(product: ProductRequest):
 #     - 409: SKU já existe
 #     - 500: Erro no servidor
 #     """
-    ssss
 
 
 # TODO

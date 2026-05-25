@@ -1,41 +1,13 @@
 from decimal import Decimal
 import logging
 from uuid import UUID
-
 from fastapi import HTTPException, status
-logger = logging.getLogger(_name_)
 from app.api.v1.repositories.product_repository import ProductRepository
-from app.core.exceptions import (
-    EmptyListResponse,
-    ProductNotFoundError,
-    DuplicateSkuError,
-    CategoryNotFoundError
-)
+from app.core.exceptions import (EmptyListResponse, ProductNotFoundError, DuplicateSkuError, CategoryNotFoundError)
+from app.schemas.v1.product import (PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductResponse, ProductRequest)
 
-from app.schemas.v1.product import (
-    PaginatedProductResponse,
-    ProductFilterParams,
-    ProductListResponse,
-    ProductResponse,
-    ProductRequest
-)
-
-from app.api.v1.repositories.product_repository import ProductRepository
-
-from app.core.exceptions import (
-    EmptyListResponse,
-    ProductNotFoundError,
-    DuplicateSkuError
-)
-
-from app.schemas.v1.product import (
-    PaginatedProductResponse,
-    ProductFilterParams,
-    ProductListResponse,
-    ProductResponse,
-    ProductRequest
-)
 logger = logging.getLogger(__name__)
+
 
 class ProductService:
 
@@ -126,75 +98,69 @@ class ProductService:
             logger.error(f"Erro ao buscar produto: {str(e)}")
             raise Exception(f"Erro ao buscar produto: {str(e)}")
 
-    # TODO
-    # @staticmethod
-    # async def create_product(request: ProductRequest) -> ProductResponse:
-    #     """Cria novo produto"""
-@staticmethod
-async def create_product(request: ProductRequest) -> ProductResponse:
-    """Cria novo produto"""
 
-    try:
+    @staticmethod
+    async def create_product(request: ProductRequest) -> ProductResponse:
+        """Cria novo produto"""
 
-        # Verifica se SKU já existe
-        sku_exists = await ProductRepository.check_sku_exists(request.sku)
+        try:
+            # Verifica SKU duplicado
+            sku_exists = await ProductRepository.check_sku_exists(request.sku)
 
-        if sku_exists:
-            raise DuplicateSkuError(request.sku)
+            if sku_exists:
+                raise DuplicateSkuError(request.sku)
 
-        # Valida categorias
-        if request.category_ids:
+            # Validar categorias
+            if request.category_ids:
+                categories_valid = await ProductRepository.validate_categories_exist(request.category_ids)
 
-            categories_valid = await ProductRepository.validate_categories_exist(
-                request.category_ids
+                if not categories_valid:
+                    raise CategoryNotFoundError(request.category_ids[0])
+
+            # Dados do produto
+            product_data = {
+                "name": request.name,
+                "sku": request.sku,
+                "description": request.description,
+                "quantity_per_unit": request.quantity_per_unit,
+                "unit_price": float(request.unit_price),
+                "discount": float(request.discount)
+            }
+
+            # Repository apenas salva
+            created_product = await ProductRepository.create(product_data=product_data, category_ids=request.category_ids)
+
+            # Processar categorias
+            categories = []
+            if created_product.get("categories"):
+                for cat_data in created_product["categories"]:
+                    if isinstance(cat_data, dict) and "categories" in cat_data:
+                        categories.append(cat_data["categories"])
+
+            return ProductResponse(
+                product_id=UUID(created_product["product_id"]),
+                name=created_product["name"],
+                sku=created_product["sku"],
+                description=created_product["description"],
+                quantity_per_unit=created_product["quantity_per_unit"],
+                unit_price=Decimal(str(created_product["unit_price"])),
+                discount=Decimal(str(created_product["discount"])),
+                categories=categories,
+                created_at=created_product["created_at"],
+                updated_at=created_product["updated_at"]
             )
 
-            if not categories_valid:
-                raise CategoryNotFoundError(request.category_ids[0])
+        except (DuplicateSkuError, CategoryNotFoundError):
+            raise
 
-        # Dados produto
-        product_data = {
-            "name": request.name,
-            "sku": request.sku,
-            "description": request.description,
-            "quantity_per_unit": request.quantity_per_unit,
-            "unit_price": float(request.unit_price),
-            "discount": float(request.discount)
-        }
+        except Exception as e:
+            logger.error(f"Erro ao criar produto: {str(e)}")
 
-        # Cria produto
-        created_product = await ProductRepository.create(
-            product_data=product_data,
-            category_ids=request.category_ids
-        )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar produto"
+            )
 
-        return ProductResponse(
-            product_id=UUID(created_product["product_id"]),
-            name=created_product["name"],
-            sku=created_product["sku"],
-            description=created_product["description"],
-            quantity_per_unit=created_product["quantity_per_unit"],
-            unit_price=Decimal(str(created_product["unit_price"])),
-            discount=Decimal(str(created_product["discount"])),
-            categories=[],
-            created_at=created_product["created_at"],
-            updated_at=created_product["updated_at"]
-        )
-
-    except (
-        DuplicateSkuError,
-        CategoryNotFoundError
-    ):
-        raise
-
-    except Exception as e:
-
-        logger.error(f"Erro ao criar produto: {str(e)}")
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao criar produto"
-        )
     # TODO
     # @staticmethod
     # async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
