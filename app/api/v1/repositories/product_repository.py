@@ -105,27 +105,18 @@ class ProductRepository:
             query = supabase.table("products").select("product_id").eq("sku", sku)
 
             response = query.execute()
-            return len(response.data > 0)
+            return len(response.data) > 0)
         except Exception as e:
             logger.error(f"Erro ao verificar SKU: {str(e)}")
             raise
 
 
-    @staticmethod
+   @staticmethod
 async def create_product(request) -> dict:
     """Cria novo produto"""
 
     try:
-        # Verifica se SKU já existe
-        existing = supabase.table("products").select("product_id").eq(
-            "sku",
-            request.sku
-        ).execute()
 
-        if existing.data:
-            raise Exception("SKU já cadastrado")
-
-        # Dados do produto
         product_data = {
             "name": request.name,
             "sku": request.sku,
@@ -135,12 +126,36 @@ async def create_product(request) -> dict:
             "discount": float(request.discount)
         }
 
-        # Inserir produto
         response = supabase.table("products").insert(
             product_data
         ).execute()
 
-        return response.data[0]
+        if not response.data:
+            raise Exception("Produto não foi criado")
+
+        product = response.data[0]
+
+        # Inserir categorias
+        if request.category_ids:
+
+            categories_data = [
+                {
+                    "product_id": product["product_id"],
+                    "category_id": str(category_id)
+                }
+                for category_id in request.category_ids
+            ]
+
+            supabase.table("products_categories").insert(
+                categories_data
+            ).execute()
+
+        # Buscar produto completo
+        created_product = await ProductRepository.get_by_sku(
+            product["sku"]
+        )
+
+        return created_product
 
     except Exception as e:
         logger.error(f"Erro ao criar produto: {str(e)}")
