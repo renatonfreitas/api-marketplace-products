@@ -139,7 +139,6 @@ class ProductRepository:
         except Exception as e:
             logger.error(f"Erro ao criar produto: {str(e)}")
             raise
-
     # TODO
     # @staticmethod
     # async def update(sku: str, product_data: dict, category_ids: list[UUID] | None = None) -> dict:

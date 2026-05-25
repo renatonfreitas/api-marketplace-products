@@ -193,8 +193,19 @@ class ProductService:
                 detail="Erro ao atualizar produto",
             )
 
-    # TODO
-    # @staticmethod
-    # async def delete_product(sku: str) -> dict:
-    #     """Deleta produto"""    
+    @staticmethod
+    async def delete_product(sku: str) -> dict:
+        """Deleta produto"""
+        try:
+            product = await ProductRepository.get_by_sku(sku)
+            if not product:
+                raise ValueError(f"Produto com SKU '{sku}' não encontrado")
+            
+            product_id = UUID(product["product_id"])
+            await ProductRepository.delete(product_id)
+            
+            return {"message": f"Produto '{sku}' deletado com sucesso"}
+        except Exception as e:
+            logger.error(f"Erro ao deletar produto: {str(e)}")
+            raise
     

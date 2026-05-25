@@ -144,7 +144,7 @@ async def delete_product(sku: str):
 #     - 500: Erro no servidor
 #     """
 
-router.put(
+@router.put(
     "/{sku}",
     response_model=ProductResponse,
     status_code=status.HTTP_200_OK,
