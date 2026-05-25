@@ -1,10 +1,10 @@
 from decimal import Decimal
 import logging
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Body, HTTPException, Path, Query, status
 from sqlmodel import default
 from app.api.v2.services.product_service import ProductService
 from app.core.exceptions import EmptyListResponse
-from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductResponse
+from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductResponse, ProductUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -120,29 +120,32 @@ async def get_product(sku: str):
 #     - 500: Erro no servidor
 #     """
 
-# TODO
-# @router.put("/{sku}", response_model=ProductResponse)
-# async def update_product(sku: str, product: ProductRequest):
-#     """
-#     Atualiza um produto
-
-#     **Path:**
-#     - sku: SKU do produto a atualizar
-    
-#     **Body (todos opcionais):**
-#     - name: Novo nome
-#     - sku: Novo SKU
-#     - unit_price: Novo preço
-#     - description, quantity_per_unit, discount: outros campos
-#     - category_ids: Nova lista de categorias
-    
-#     **Responses:**
-#     - 200: Produto atualizado
-#     - 400: Dados inválidos
-#     - 404: Produto não encontrado
-#     - 409: SKU já existe
-#     - 500: Erro no servidor
-#     """
+router.put(
+    "/{sku}",
+    response_model=ProductResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Atualizar produto",
+    description="Atualiza um produto existente. Envie apenas os campos que deseja alterar."
+)
+async def update_product(
+    sku: str = Path(..., description="SKU do produto a atualizar"),
+    product: ProductUpdate = Body(..., description="Campos a atualizar (todos opcionais)")
+):
+    """
+    Atualiza um produto e suas relações (categorias e fornecedores).
+    - **sku**: SKU do produto a ser atualizado.
+    - **Body**: Campos opcionais a serem atualizados.
+    """
+    try:
+        return await ProductService.update_product(sku, product)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao atualizar produto: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao atualizar produto"
+        )
     
 
 

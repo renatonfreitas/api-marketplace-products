@@ -1,5 +1,6 @@
 from app.api.v2.repositories.product_repository import ProductRepository
 from app.api.v2.repositories.supplier_repository import SupplierRepository
+from app.core.exceptions import ProductNotFoundError
 from app.core.exceptions import EmptyListResponse, ProductNotFoundError
 from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductRequest, ProductResponse
 from decimal import Decimal
@@ -118,10 +119,78 @@ class ProductService:
     # async def create_product(request: ProductRequest) -> ProductResponse:
     #     """Cria novo produto"""
 
-    # TODO
-    # @staticmethod
-    # async def update_product(sku: str, request: ProductRequest) -> ProductResponse:
-    #     """Atualiza produto"""
+    @staticmethod
+    async def update_product(sku: str, request: ProductUpdate) -> ProductResponse:
+        """Atualiza um produto existente (parcial)"""
+        try:
+            # 1. Valida existência (lógica de negócio)
+            existing = await ProductRepository.get_by_sku(sku)
+            if not existing:
+                raise ProductNotFoundError(sku)
+
+            product_id = UUID(existing["product_id"])
+
+            # 2. Valida novo SKU (se alterado)
+            if request.sku and request.sku != sku:
+                if await ProductRepository.check_sku_exists(request.sku):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"SKU '{request.sku}' já está em uso",
+                    )
+
+            # 3. Valida categorias e suppliers (se fornecidos)
+            if request.category_ids is not None:
+                if not await ProductRepository.validate_categories_exist(
+                    request.category_ids
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Uma ou mais categorias não existem",
+                    )
+            if request.supplier_ids is not None:
+                if not await ProductRepository.validate_suppliers_exist(
+                    request.supplier_ids
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Um ou mais suppliers não existem",
+                    )
+
+            # 4. Prepara dados (apenas campos enviados)
+            update_data = request.model_dump(exclude_unset=True)
+            category_ids = update_data.pop("category_ids", None)
+            supplier_ids = update_data.pop("supplier_ids", None)
+
+            if not update_data and category_ids is None and supplier_ids is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Nenhum campo para atualizar",
+                )
+
+            # 5. Chama o repository (passando product_id)
+            updated_product = await ProductRepository.update(
+                product_id=product_id,
+                product_data=update_data,
+                category_ids=category_ids,
+                supplier_ids=supplier_ids,
+            )
+
+            # 6. Formata resposta
+            return await ProductService._format_product_response(updated_product)
+
+        except ProductNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Produto com SKU '{sku}' não encontrado",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao atualizar produto: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao atualizar produto",
+            )
 
     # TODO
     # @staticmethod
