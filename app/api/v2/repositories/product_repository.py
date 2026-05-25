@@ -148,50 +148,65 @@ class ProductRepository:
     #              """Cria novo produto com categorias"""
     
 
-    @staticmethod
-    async def update(
-        sku: str,
-        product_data: dict,
-        category_ids: list[UUID] | None = None,
-        supplier_ids: list[UUID] | None = None
-    ) -> dict:
-        """Atualiza produto e suas relações de forma atômica"""
-        try:
-            existing = await ProductRepository.get_by_sku(sku)
-            if not existing:
-                raise ProductNotFoundError(sku)
+@staticmethod
+async def update(
+    product_id: UUID,
+    product_data: dict,
+    category_ids: list[UUID] | None = None,
+    supplier_ids: list[UUID] | None = None
+) -> dict:
+    """
+    Atualiza os dados do produto e suas relações.
+    Pressupõe que o produto existe (a validação é feita no service).
+    
+    Args:
+        product_id: UUID do produto
+        product_data: Campos a atualizar na tabela products
+        category_ids: Lista de UUIDs de categorias (None = não altera)
+        supplier_ids: Lista de UUIDs de suppliers (None = não altera)
+    
+    Returns:
+        Produto atualizado com relações carregadas
+    """
+    try:
+        # Atualiza campos do produto
+        if product_data:
+            update_response = supabase.table("products") \
+                .update(product_data) \
+                .eq("product_id", str(product_id)) \
+                .execute()
 
-            product_id = existing["product_id"]
+            if not update_response.data:
+                raise Exception(f"Falha ao atualizar produto ID: {product_id}")
 
-            if product_data:
-                update_response = supabase.table("products") \
-                    .update(product_data) \
-                    .eq("sku", sku) \
-                    .execute()
-
-                if not update_response.data:
-                    raise Exception(f"Falha ao atualizar produto SKU: {sku}")
-
-            if category_ids is not None:
-                await ProductRepository._update_product_categories(
-                    product_id, category_ids
-                )
-
-            if supplier_ids is not None:
-                await ProductRepository._update_product_suppliers(
-                    product_id, supplier_ids
-                )
-
-            updated_product = await ProductRepository.get_by_sku(
-                product_data.get("sku", sku)
+        # Atualiza relações de categorias
+        if category_ids is not None:
+            await ProductRepository._update_product_categories(
+                product_id, category_ids
             )
-            return updated_product
 
-        except ProductNotFoundError:
-            raise
-        except Exception as e:
-            logger.error(f"Erro ao atualizar produto {sku}: {str(e)}")
-            raise
+        # Atualiza relações de suppliers
+        if supplier_ids is not None:
+            await ProductRepository._update_product_suppliers(
+                product_id, supplier_ids
+            )
+
+        # Retorna o produto completo atualizado 
+        # Se o SKU foi alterado, usamos o novo; caso contrário, buscamos pelo ID.
+        new_sku = product_data.get("sku")
+        if new_sku:
+            updated_product = await ProductRepository.get_by_sku(new_sku)
+        else:
+            # Busca pelo ID diretamente 
+            # Como não temos mais o SKU garantido, podemos criar um get_by_id que retorne
+            # o produto completo. Isso é aceitável pois é apenas para retorno.
+            updated_product = await ProductRepository._get_by_id(product_id)
+        
+        return updated_product
+
+    except Exception as e:
+        logger.error(f"Erro ao atualizar produto ID {product_id}: {str(e)}")
+        raise
     # TODO
     # @staticmethod
     # async def delete(sku: str) -> bool:
