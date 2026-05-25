@@ -98,6 +98,30 @@ async def get_product(sku: str):
             detail="Erro ao buscar produto"
         )
 
+@router.delete("/{sku}", status_code=status.HTTP_200_OK)
+async def delete_product(sku: str):
+    """
+    Deleta um produto pelo SKU.
+
+    - **sku**: Código único do produto
+
+    Respostas:
+    - 200: Produto deletado com sucesso
+    - 404: Produto não encontrado
+    - 409: Produto não pode ser deletado
+    - 500: Erro no servidor
+    """
+    try:
+        return await ProductService.delete_product(sku)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Erro ao deletar produto: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao deletar produto"
+        )
+
 # TODO
 # @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 # async def create_product(product: ProductRequest):

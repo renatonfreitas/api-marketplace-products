@@ -212,6 +212,20 @@ async def update(
     # @staticmethod
     # async def delete(sku: str) -> bool:
     #     """Deleta produto e suas categorias"""
+    
+    @staticmethod
+    async def delete(sku: str) -> bool:
+        """Marca o produto como inativo (soft delete)."""
+        try:
+            response = supabase.table("products").update({
+                "is_active": False
+            }).eq("sku", sku).eq("is_active", True).execute()
+            return bool(response.data)
+        except Exception as e:
+            logger.error(f"Erro ao deletar produto: {str(e)}")
+            raise
+
+
 
     @staticmethod
     async def validate_categories_exist(category_ids: list[UUID]) -> bool:
