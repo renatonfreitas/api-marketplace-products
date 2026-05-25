@@ -101,73 +101,99 @@ async def get_product(sku: str):
 
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(product: ProductRequest):
-        """
-        **Body:**
-        - name: Nome do produto (obrigatório)
-        - sku: Identificador único (obrigatório)
-        - unit_price: Preço unitário em decimal (obrigatório)
-        - description: Descrição (opcional)
-        - quantity_per_unit: Quantidade por unidade (opcional)
-        - discount: Desconto em % (0-100, padrão: 0)
-        - category_ids: Lista de UUIDs de categorias (opcional)
-        
-        **Responses:**
-        - 201: Produto criado com sucesso
-        - 400: Dados inválidos
-        - 409: SKU já existe
-        - 500: Erro no servidor
-        """
-        try:
-            return await ProductService.create_product(product)
-
-        except HTTPException as e:
-            raise e
-
-        except Exception as e:
-            logger.error(f"Erro ao criar produto: {str(e)}")
-
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao criar produto"
-            )
-
-# TODO
-# @router.put("/{sku}", response_model=ProductResponse)
-# async def update_product(sku: str, product: ProductRequest):
-#     
-#     Atualiza um produto
-
-#     **Path:**
-#     - sku: SKU do produto a atualizar
+    """
+    Cria um novo produto.
     
-#     **Body (todos opcionais):**
-#     - name: Novo nome
-#     - sku: Novo SKU
-#     - unit_price: Novo preço
-#     - description, quantity_per_unit, discount: outros campos
-#     - category_ids: Nova lista de categorias
+    **Body:**
+    - sku: Identificador único (obrigatório)
+    - name: Nome do produto (obrigatório)
+    - unit_price: Preço unitário em decimal (obrigatório)
+    - description: Descrição (opcional)
+    - quantity_per_unit: Quantidade por unidade (opcional)
+    - discount: Desconto em % (0-100, padrão: 0)
+    - category_ids: Lista de UUIDs de categorias (opcional)
     
-#     **Responses:**
-#     - 200: Produto atualizado
-#     - 400: Dados inválidos
-#     - 404: Produto não encontrado
-#     - 409: SKU já existe
-#     - 500: Erro no servidor
-#     """
+    **Responses:**
+    - 201: Produto criado com sucesso
+    - 400: Dados inválidos
+    - 409: SKU já existe
+    - 500: Erro no servidor
+    """
+    try:
+        return await ProductService.create_product(product)
+    except HTTPException as e:
+        raise e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Dados inválidos: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao criar produto: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao criar produto"
+        )
 
-
-# TODO
-# @router.delete("/{sku}", status_code=status.HTTP_200_OK)
-# async def delete_product(sku: str):
-#     """
-#     Deleta um produto.
-
-#     **Path:**
-#     - sku: SKU do produto a deletar
+@router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+async def create_product(product: ProductRequest):
+    """
+    Cria um novo produto.
     
-#     **Responses:**
-#     - 200: Produto deletado com sucesso
-#     - 404: Produto não encontrado
-#     - 409: Produto não pode ser deletado
-#     - 500: Erro no servidor
-#     """
+    **Body:**
+    - sku: Identificador único (obrigatório)
+    - name: Nome do produto (obrigatório)
+    - unit_price: Preço unitário em decimal (obrigatório)
+    - description: Descrição (opcional)
+    - quantity_per_unit: Quantidade por unidade (opcional)
+    - discount: Desconto em % (0-100, padrão: 0)
+    - category_ids: Lista de UUIDs de categorias (opcional)
+    
+    **Responses:**
+    - 201: Produto criado com sucesso
+    - 400: Dados inválidos
+    - 409: SKU já existe
+    - 500: Erro no servidor
+    """
+    try:
+        return await ProductService.create_product(product)
+    except HTTPException as e:
+        raise e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Dados inválidos: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao criar produto: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao criar produto"
+        )
+
+
+@router.delete("/{sku}", status_code=status.HTTP_200_OK)
+async def delete_product(sku: str):
+    """
+    Deleta um produto.
+    
+    **Path:**
+    - sku: SKU do produto a deletar
+    
+    **Responses:**
+    - 200: Produto deletado com sucesso
+    - 404: Produto não encontrado
+    - 409: Produto não pode ser deletado
+    - 500: Erro no servidor
+    """
+    try:
+        return await ProductService.delete_product(sku)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Erro ao deletar produto: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao deletar produto"
+        )
+    

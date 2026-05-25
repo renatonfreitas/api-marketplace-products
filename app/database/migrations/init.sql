@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS products (
     sku VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
     quantity_per_unit VARCHAR(50),
-    unity_quantity VARCHAR(50),
+    unit_quantity VARCHAR(50),
     unit_price DECIMAL(10, 2) NOT NULL CHECK (unit_price > 0),
     discount DECIMAL(5, 2) DEFAULT 0 CHECK (discount >= 0 AND discount <= 100),
     is_active BOOLEAN DEFAULT TRUE,

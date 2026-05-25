@@ -99,6 +99,20 @@ class ProductRepository:
             logger.error(f"Erro ao buscar produto por SKU: {str(e)}")
             raise
 
+    @staticmethod
+    async def get_by_id(product_id: UUID) -> dict | None:
+        """Busca produto por ID"""
+        try:
+            response = supabase.table("products").select(
+                "*, categories:products_categories(category_id, categories(category_id, name))"
+            ).eq("product_id", str(product_id)).execute()
+            
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Erro ao buscar produto por ID: {str(e)}")
+            raise
+
+    @staticmethod
     async def check_sku_exists(sku: str) -> bool:
         """Verifica se SKU já existe"""
         try:
@@ -113,10 +127,9 @@ class ProductRepository:
 
     @staticmethod
     async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
-        """Cria novo produto"""
+        """Cria novo produto com categoria"""
         
         try:
-
             # Inserir produto
             response = supabase.table("products").insert(product_data).execute()
             
@@ -126,28 +139,65 @@ class ProductRepository:
             product = response.data[0]
             product_id = product["product_id"]
 
-            # Inserir categorias
+            # Adicionar categorias se fornecidas
             if category_ids:
                 product_categories = [
-                    {"product_id": str(product_id), "category_id": str(category_id)}
-                    for category_id in category_ids
+                    {"product_id": str(product_id), "category_id": str(cat_id)}
+                    for cat_id in category_ids
                 ]
                 supabase.table("products_categories").insert(product_categories).execute()
 
+            # Retornar produto completo
             return await ProductRepository.get_by_sku(product["sku"])
 
         except Exception as e:
             logger.error(f"Erro ao criar produto: {str(e)}")
             raise
-    # TODO
-    # @staticmethod
-    # async def update(sku: str, product_data: dict, category_ids: list[UUID] | None = None) -> dict:
-    #     """Atualiza produto e categorias"""
 
-    # TODO
-    # @staticmethod
-    # async def delete_product(sku: str) -> bool:
-    #     """Deleta produto e suas categorias"""
+    @staticmethod
+    async def update(product_id: UUID, product_data: dict, category_ids: list[UUID] | None = None) -> dict:
+        """Atualiza produto e categorias"""
+        
+        try:
+            #Atualizar produto
+            response = supabase.table("products").update(product_data).eq("product_id", str(product_id)).execute()
+            
+            if not response.data:
+                raise Exception("Produto não encontrado")
+            
+            # Atualizar categorias se fornecidas
+            if category_ids is not None:
+                # Deletar categorias anteriores
+                supabase.table("products_categories").delete().eq("product_id", str(product_id)).execute()
+
+                # Inserir novas categorias
+                if category_ids:
+                    product_categories = [
+                        {"product_id": str(product_id), "category_id": str(cat_id)}
+                        for cat_id in category_ids
+                    ]
+                    supabase.table("products_categories").insert(product_categories).execute()
+
+            return await ProductRepository.get_by_id(product_id)
+        
+        except Exception as e:
+            logger.error(f"Erro ao atualizar produto: {str(e)}")
+            raise
+
+    @staticmethod
+    async def delete(product_id: UUID) -> bool:
+        """Deleta produto e suas categorias"""
+        try:
+            # Deletar relacionamentos
+            supabase.table("products_categories").delete().eq("product_id", str(product_id)).execute()
+            
+            # Deletar produto
+            response = supabase.table("products").delete().eq("product_id", str(product_id)).execute()
+            
+            return len(response.data) > 0
+        except Exception as e:
+            logger.error(f"Erro ao deletar produto: {str(e)}")
+            raise
 
     @staticmethod
     async def validate_categories_exist(category_ids: list[UUID]) -> bool:

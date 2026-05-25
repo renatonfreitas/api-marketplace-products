@@ -142,90 +142,62 @@ class ProductRepository:
             raise
 
 
-    # TODO
-    # @staticmethod
-    # async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
-    #              """Cria novo produto com categorias"""
+    @staticmethod
+    async def create(product_data: dict, category_ids: list[UUID] | None = None, supplier_ids: list[UUID] | None = None) -> dict:
+        try:
+            response = supabase.table("products").insert(product_data).execute()
+            if not response.data:
+                return {}
+            product_id = response.data[0]["product_id"]
+            
+            if category_ids:
+                cats = [{"product_id": str(product_id), "category_id": str(cid)} for cid in category_ids]
+                supabase.table("products_categories").insert(cats).execute()
+            
+            if supplier_ids:
+                sups = [{"product_id": str(product_id), "supplier_id": str(sid)} for sid in supplier_ids]
+                supabase.table("products_suppliers").insert(sups).execute()
+            
+            return await ProductRepository.get_by_sku(product_data["sku"])
+        except Exception as e:
+            logger.error(f"Erro: {str(e)}")
+            raise
     
 
-@staticmethod
-async def update(
-    product_id: UUID,
-    product_data: dict,
-    category_ids: list[UUID] | None = None,
-    supplier_ids: list[UUID] | None = None
-) -> dict:
-    """
-    Atualiza os dados do produto e suas relações.
-    Pressupõe que o produto existe (a validação é feita no service).
-    
-    Args:
-        product_id: UUID do produto
-        product_data: Campos a atualizar na tabela products
-        category_ids: Lista de UUIDs de categorias (None = não altera)
-        supplier_ids: Lista de UUIDs de suppliers (None = não altera)
-    
-    Returns:
-        Produto atualizado com relações carregadas
-    """
-    try:
-        # Atualiza campos do produto
-        if product_data:
-            update_response = supabase.table("products") \
-                .update(product_data) \
-                .eq("product_id", str(product_id)) \
-                .execute()
-
-            if not update_response.data:
-                raise Exception(f"Falha ao atualizar produto ID: {product_id}")
-
-        # Atualiza relações de categorias
-        if category_ids is not None:
-            await ProductRepository._update_product_categories(
-                product_id, category_ids
-            )
-
-        # Atualiza relações de suppliers
-        if supplier_ids is not None:
-            await ProductRepository._update_product_suppliers(
-                product_id, supplier_ids
-            )
-
-        # Retorna o produto completo atualizado 
-        # Se o SKU foi alterado, usamos o novo; caso contrário, buscamos pelo ID.
-        new_sku = product_data.get("sku")
-        if new_sku:
-            updated_product = await ProductRepository.get_by_sku(new_sku)
-        else:
-            # Busca pelo ID diretamente 
-            # Como não temos mais o SKU garantido, podemos criar um get_by_id que retorne
-            # o produto completo. Isso é aceitável pois é apenas para retorno.
-            updated_product = await ProductRepository._get_by_id(product_id)
-        
-        return updated_product
-
-    except Exception as e:
-        logger.error(f"Erro ao atualizar produto ID {product_id}: {str(e)}")
-        raise
-    
-    # TODO
-    # @staticmethod
-    # async def delete(sku: str) -> bool:
-    #     """Deleta produto e suas categorias"""
+    @staticmethod
+    async def update(product_id: UUID, product_data: dict, category_ids: list[UUID] | None = None, supplier_ids: list[UUID] | None = None) -> dict:
+        try:
+            response = supabase.table("products").update(product_data).eq("product_id", str(product_id)).execute()
+            if not response.data:
+                return {}
+            
+            if category_ids is not None:
+                supabase.table("products_categories").delete().eq("product_id", str(product_id)).execute()
+                if category_ids:
+                    cats = [{"product_id": str(product_id), "category_id": str(cid)} for cid in category_ids]
+                    supabase.table("products_categories").insert(cats).execute()
+            
+            if supplier_ids is not None:
+                supabase.table("products_suppliers").delete().eq("product_id", str(product_id)).execute()
+                if supplier_ids:
+                    sups = [{"product_id": str(product_id), "supplier_id": str(sid)} for sid in supplier_ids]
+                    supabase.table("products_suppliers").insert(sups).execute()
+            
+            return await ProductRepository.get_by_sku(response.data[0]["sku"])
+        except Exception as e:
+            logger.error(f"Erro: {str(e)}")
+            raise
     
     @staticmethod
-    async def delete(sku: str) -> bool:
-        """Marca o produto como inativo (soft delete)."""
+    async def delete(product_id: UUID) -> bool:
         try:
-            response = supabase.table("products").update({
-                "is_active": False
-            }).eq("sku", sku).eq("is_active", True).execute()
-            return bool(response.data)
+            supabase.table("products_categories").delete().eq("product_id", str(product_id)).execute()
+            supabase.table("products_suppliers").delete().eq("product_id", str(product_id)).execute()
+            response = supabase.table("products").update({"is_active": False}).eq("product_id", str(product_id)).execute()
+            return len(response.data) > 0
         except Exception as e:
-            logger.error(f"Erro ao deletar produto: {str(e)}")
+            logger.error(f"Erro: {str(e)}")
             raise
-
-
 
     @staticmethod
     async def validate_categories_exist(category_ids: list[UUID]) -> bool:

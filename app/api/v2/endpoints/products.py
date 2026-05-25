@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Query, status
 from sqlmodel import default
 from app.api.v2.services.product_service import ProductService
 from app.core.exceptions import EmptyListResponse
-from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductResponse, ProductUpdate
+from app.schemas.v2.product import PaginatedProductResponse, ProductFilterParams, ProductRequest, ProductResponse, ProductUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -98,93 +98,84 @@ async def get_product(sku: str):
             detail="Erro ao buscar produto"
         )
 
+@router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+async def create_product(product: ProductRequest):
+    """
+    Cria um novo produto
+    
+    - **sku**: Código único (obrigatório)
+    - **name**: Nome do produto (obrigatório)
+    - **unit_price**: Preço unitário (obrigatório, deve ser > 0)
+    - **discount**: Desconto em % (opcional, 0-100)
+    - **description**: Descrição (opcional)
+    - **unit_quantity**: Quantidade por unidade (opcional)
+    - **category_ids**: Lista de IDs de categorias (opcional)
+    - **supplier_ids**: Lista de IDs de suppliers (opcional)
+    """
+    try:
+        return await ProductService.create_product(
+            sku=product.sku,
+            name=product.name,
+            unit_price=product.unit_price,
+            discount=product.discount,
+            description=product.description,
+            unit_quantity=product.unit_quantity,
+            category_ids=product.category_ids,
+            supplier_ids=product.supplier_ids
+        )
+    except ValueError as e:
+        logger.warning(f"Erro de validação: {str(e)}")
+        if "já existe" in str(e):
+            raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao criar produto: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao criar produto")
+
+@router.put("/{sku}", response_model=ProductResponse)
+async def update_product(sku: str, product: ProductUpdate):
+    """
+    Atualiza um produto existente
+    
+    - **sku**: SKU do produto a atualizar
+    - Outros campos são opcionais
+    """
+    try:
+        return await ProductService.update_product(
+            sku=sku,
+            new_sku=product.sku,
+            name=product.name,
+            unit_price=product.unit_price,
+            discount=product.discount,
+            description=product.description,
+            unit_quantity=product.unit_quantity,
+            is_active=product.is_active,
+            category_ids=product.category_ids,
+            supplier_ids=product.supplier_ids
+        )
+    except ValueError as e:
+        logger.warning(f"Erro de validação: {str(e)}")
+        if "não encontrado" in str(e):
+            raise HTTPException(status_code=404, detail=str(e))
+        if "já existe" in str(e):
+            raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao atualizar produto: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao atualizar produto")
+    
 @router.delete("/{sku}", status_code=status.HTTP_200_OK)
 async def delete_product(sku: str):
     """
-    Deleta um produto pelo SKU.
-
-    - **sku**: Código único do produto
-
-    Respostas:
-    - 200: Produto deletado com sucesso
-    - 404: Produto não encontrado
-    - 409: Produto não pode ser deletado
-    - 500: Erro no servidor
+    Deleta um produto (soft delete - marca como inativo)
+    
+    - **sku**: SKU do produto a deletar
     """
     try:
         return await ProductService.delete_product(sku)
-    except HTTPException as e:
-        raise e
+    except ValueError as e:
+        logger.warning(f"Produto não encontrado: {sku}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Erro ao deletar produto: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao deletar produto"
-        )
-
-# TODO
-# @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-# async def create_product(product: ProductRequest):
-#     """
-#     Cria um novo produto
-
-#     **Body:**
-#     - name: Nome do produto (obrigatório)
-#     - sku: Identificador único (obrigatório)
-#     - unit_price: Preço unitário em decimal (obrigatório)
-#     - description: Descrição (opcional)
-#     - quantity_per_unit: Quantidade por unidade (opcional)
-#     - discount: Desconto em % (0-100, padrão: 0)
-#     - category_ids: Lista de UUIDs de categorias (opcional)
-    
-#     **Responses:**
-#     - 201: Produto criado com sucesso
-#     - 400: Dados inválidos
-#     - 409: SKU já existe
-#     - 500: Erro no servidor
-#     """
-
-@router.put(
-    "/{sku}",
-    response_model=ProductResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Atualizar produto",
-    description="Atualiza um produto existente. Envie apenas os campos que deseja alterar."
-)
-async def update_product(
-    sku: str = Path(..., description="SKU do produto a atualizar"),
-    product: ProductUpdate = Body(..., description="Campos a atualizar (todos opcionais)")
-):
-    """
-    Atualiza um produto e suas relações (categorias e fornecedores).
-    - **sku**: SKU do produto a ser atualizado.
-    - **Body**: Campos opcionais a serem atualizados.
-    """
-    try:
-        return await ProductService.update_product(sku, product)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao atualizar produto: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao atualizar produto"
-        )
-    
-
-
-# TODO
-# @router.delete("/{sku}", status_code=status.HTTP_200_OK)
-# async def delete_product(sku: str):
-#     """
-#     Deleta um produto.
-
-#     **Path:**
-#     - sku: SKU do produto a deletar
-    
-#     **Responses:**
-#     - 200: Produto deletado com sucesso
-#     - 404: Produto não encontrado
-#     - 409: Produto não pode ser deletado
-#     - 500: Erro no servidor
-#     """
+        raise HTTPException(status_code=500, detail="Erro ao deletar produto")
