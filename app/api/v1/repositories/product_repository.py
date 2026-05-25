@@ -105,46 +105,40 @@ class ProductRepository:
             query = supabase.table("products").select("product_id").eq("sku", sku)
 
             response = query.execute()
-            return len(response.data > 0)
+            return len(response.data) > 0
         except Exception as e:
             logger.error(f"Erro ao verificar SKU: {str(e)}")
             raise
 
 
     @staticmethod
-async def create_product(request) -> dict:
-    """Cria novo produto"""
+    async def create(product_data: dict, category_ids: list[UUID] | None = None) -> dict:
+        """Cria novo produto"""
+        
+        try:
 
-    try:
-        # Verifica se SKU já existe
-        existing = supabase.table("products").select("product_id").eq(
-            "sku",
-            request.sku
-        ).execute()
+            # Inserir produto
+            response = supabase.table("products").insert(product_data).execute()
+            
+            if not response.data:
+                raise Exception("Falha ao criar produto")
 
-        if existing.data:
-            raise Exception("SKU já cadastrado")
+            product = response.data[0]
+            product_id = product["product_id"]
 
-        # Dados do produto
-        product_data = {
-            "name": request.name,
-            "sku": request.sku,
-            "description": request.description,
-            "quantity_per_unit": request.quantity_per_unit,
-            "unit_price": float(request.unit_price),
-            "discount": float(request.discount)
-        }
+            # Inserir categorias
+            if category_ids:
+                product_categories = [
+                    {"product_id": str(product_id), "category_id": str(category_id)}
+                    for category_id in category_ids
+                ]
+                supabase.table("products_categories").insert(product_categories).execute()
 
-        # Inserir produto
-        response = supabase.table("products").insert(
-            product_data
-        ).execute()
+            return await ProductRepository.get_by_sku(product["sku"])
 
-        return response.data[0]
-
-    except Exception as e:
-        logger.error(f"Erro ao criar produto: {str(e)}")
-        raise
+        except Exception as e:
+            logger.error(f"Erro ao criar produto: {str(e)}")
+            raise
 
     # TODO
     # @staticmethod

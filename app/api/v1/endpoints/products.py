@@ -1,9 +1,10 @@
-
 from decimal import Decimal
+import logging
 from fastapi import APIRouter, HTTPException, Query, status
 from app.api.v1.services.product_service import ProductService
 from app.core.exceptions import EmptyListResponse
-from app.schemas.v1.product import PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductResponse, ProductRequest
+from app.schemas.v1.product import (PaginatedProductResponse, ProductFilterParams, ProductListResponse, ProductResponse, ProductRequest)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter( # Controller
@@ -97,89 +98,43 @@ async def get_product(sku: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao buscar produto"
         )
-@staticmethod
-async def create_product(request: ProductRequest) -> ProductResponse:
-    """Cria novo produto"""
 
-    try:
-        # Verifica SKU duplicado
-        sku_exists = await ProductRepository.check_sku_exists(request.sku)
+@router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+async def create_product(product: ProductRequest):
+        """
+        **Body:**
+        - name: Nome do produto (obrigatório)
+        - sku: Identificador único (obrigatório)
+        - unit_price: Preço unitário em decimal (obrigatório)
+        - description: Descrição (opcional)
+        - quantity_per_unit: Quantidade por unidade (opcional)
+        - discount: Desconto em % (0-100, padrão: 0)
+        - category_ids: Lista de UUIDs de categorias (opcional)
+        
+        **Responses:**
+        - 201: Produto criado com sucesso
+        - 400: Dados inválidos
+        - 409: SKU já existe
+        - 500: Erro no servidor
+        """
+        try:
+            return await ProductService.create_product(product)
 
-        if sku_exists:
-            raise DuplicateSkuError(request.sku)
+        except HTTPException as e:
+            raise e
 
-        # Validar categorias
-        if request.category_ids:
-            categories_valid = await ProductRepository.validate_categories_exist(
-                request.category_ids
+        except Exception as e:
+            logger.error(f"Erro ao criar produto: {str(e)}")
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar produto"
             )
-
-            if not categories_valid:
-                raise CategoryNotFoundError(request.category_ids[0])
-
-        # Dados do produto
-        product_data = {
-            "name": request.name,
-            "sku": request.sku,
-            "description": request.description,
-            "quantity_per_unit": request.quantity_per_unit,
-            "unit_price": float(request.unit_price),
-            "discount": float(request.discount)
-        }
-
-        # Repository salva no banco
-        created_product = await ProductRepository.create(
-            product_data=product_data,
-            category_ids=request.category_ids
-        )
-
-        return ProductResponse(
-            product_id=UUID(created_product["product_id"]),
-            name=created_product["name"],
-            sku=created_product["sku"],
-            description=created_product["description"],
-            quantity_per_unit=created_product["quantity_per_unit"],
-            unit_price=Decimal(str(created_product["unit_price"])),
-            discount=Decimal(str(created_product["discount"])),
-            categories=[],
-            created_at=created_product["created_at"],
-            updated_at=created_product["updated_at"]
-        )
-
-    except (
-        DuplicateSkuError,
-        CategoryNotFoundError
-    ):
-        raise
-
-    except Exception as e:
-        logger.error(f"Erro ao criar produto: {str(e)}")
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao criar produto"
-        )
-
-#     **Body:**
-#     - name: Nome do produto (obrigatório)
-#     - sku: Identificador único (obrigatório)
-#     - unit_price: Preço unitário em decimal (obrigatório)
-#     - description: Descrição (opcional)
-#     - quantity_per_unit: Quantidade por unidade (opcional)
-#     - discount: Desconto em % (0-100, padrão: 0)
-#     - category_ids: Lista de UUIDs de categorias (opcional)
-    
-#     **Responses:**
-#     - 201: Produto criado com sucesso
-#     - 400: Dados inválidos
-#     - 409: SKU já existe
-#     - 500: Erro no servidor
-#     """
 
 # TODO
 # @router.put("/{sku}", response_model=ProductResponse)
 # async def update_product(sku: str, product: ProductRequest):
-#     """
+#     
 #     Atualiza um produto
 
 #     **Path:**
@@ -199,7 +154,6 @@ async def create_product(request: ProductRequest) -> ProductResponse:
 #     - 409: SKU já existe
 #     - 500: Erro no servidor
 #     """
-    ssss
 
 
 # TODO
